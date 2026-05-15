@@ -5,13 +5,13 @@ import 'package:http/http.dart' as http;
 class AuthService {
   final String baseUrl = 'http://10.200.36.204:5000/api';
 
-  Future<bool> login(String email, String password) async {
+  Future<bool> login(String ci, String password) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/login'), // Ajusta la ruta según el backend de tu amigo
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'email': email,
+          'ci': ci,
           'password': password,
         }),
       );
