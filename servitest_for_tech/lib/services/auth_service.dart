@@ -1,14 +1,21 @@
-// lib/services/auth_service.dart
 import 'dart:convert';
+
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-class AuthService {
-  final String baseUrl = 'http://10.200.36.204:5000/api';
+import '../models/user_model.dart';
 
-  Future<bool> login(String ci, String password) async {
+class ApiService {
+  final String baseUrl = dotenv.env['API_URL'] ?? 'http://10.200.36.204:5000/api';
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  Future<LoginResponse> login(String ci, String password) async {
+    final url = Uri.parse('$baseUrl/auth/login');
+
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'), // Ajusta la ruta según el backend de tu amigo
+        url,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'ci': ci,
@@ -17,16 +24,35 @@ class AuthService {
       );
 
       if (response.statusCode == 200) {
-        // Aquí podrías guardar el token usando el paquete 'shared_preferences'
-        print("Login exitoso");
-        return true;
-      } else {
-        print("Fallo en login: ${response.body}");
-        return false;
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final loginResponse = LoginResponse.fromJson(data);
+        await _storage.write(key: 'token', value: loginResponse.token);
+        return loginResponse;
       }
+
+      final errorBody = response.body.isNotEmpty ? response.body : 'Error ${response.statusCode}';
+      throw ApiException(response.statusCode, errorBody);
     } catch (e) {
-      print("Error de red: $e");
-      return false;
+      if (e is ApiException) rethrow;
+      throw ApiException(0, 'No se pudo conectar al servidor de login: $e');
     }
   }
+
+  Future<String?> getToken() async {
+    return _storage.read(key: 'token');
+  }
+
+  Future<void> logout() async {
+    await _storage.delete(key: 'token');
+  }
+}
+
+class ApiException implements Exception {
+  final int statusCode;
+  final String message;
+
+  ApiException(this.statusCode, this.message);
+
+  @override
+  String toString() => 'ApiException($statusCode): $message';
 }
