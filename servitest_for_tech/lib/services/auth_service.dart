@@ -4,7 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-import '../models/user_model.dart';
+import '../models/auth_model.dart';
 
 class ApiService {
   final String baseUrl = dotenv.env['API_URL'] ?? 'http://10.200.36.204:5000/api';
@@ -12,7 +12,7 @@ class ApiService {
 
   Future<LoginResponse> login(String ci, String password) async {
     final url = Uri.parse('$baseUrl/auth/login');
-
+    print('Login URL: $baseUrl/auth/login');
     try {
       final response = await http.post(
         url,

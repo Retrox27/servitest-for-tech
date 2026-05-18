@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'services/auth_service.dart';
-import 'models/user_model.dart';
+import 'models/auth_model.dart';
 
 // Esto va antes de tu función main()
 class MyHttpOverrides extends HttpOverrides {
