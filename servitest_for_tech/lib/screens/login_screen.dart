@@ -37,7 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text.trim();
 
     if (ci.isEmpty || password.isEmpty) {
-      _showMessage('Por favor ingresa CI y contraseña.');
+      _showMessage('Por favor ingresa tu número de cédula y contraseña.');
       return;
     }
 
@@ -47,15 +47,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final LoginResponse response = await _apiService.login(ci, password);
-      _showMessage('Login correcto. Bienvenido ${response.name}', success: true);
-      // Aquí puedes navegar a otra pantalla cuando tengas tu homepage
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen()));
+      if (!mounted) return;
+      _showMessage('Bienvenido ${response.name}', success: true);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(username: response.name, role: response.role),
+        ),
+      );
     } catch (e) {
-      _showMessage('Error de login: ${e.toString()}');
+      if (mounted) _showMessage('Error de login: ${e.toString()}');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -111,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         keyboardType: TextInputType.number,
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(
-                          labelText: 'CI',
+                          labelText: 'Cédula de identidad',
                           hintText: 'Ingrese su número de cédula',
                         ),
                       ),
