@@ -2,13 +2,16 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../models/user_model.dart';
+import '../services/auth_service.dart';
+
 enum UserManagementMode { register, changePassword }
 
 class HomeScreen extends StatefulWidget {
   final String? username;
   final String? role;
 
-  const HomeScreen({Key? key, this.username, this.role}) : super(key: key);
+  const HomeScreen({super.key, this.username, this.role});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -17,6 +20,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _showUserManagement = false;
   UserManagementMode _managementMode = UserManagementMode.register;
+
+  final ApiService _apiService = ApiService();
+  bool _isSubmitting = false;
 
   final TextEditingController _ciController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
@@ -27,13 +33,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool get _canManageUsers {
     final role = widget.role?.toLowerCase() ?? '';
     return role.contains('jefe') ||
-        role.contains('supervisor') ||
         role.contains('admin') ||
-        role.contains('administrador') ||
-        role.contains('manager');
+        role.contains('technician_manager') ||
+        role.contains('contact_center_manager');
   }
-
-  bool get _canChangeRole => _canManageUsers;
 
   @override
   void dispose() {
@@ -67,10 +70,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _submitUserForm() {
+  Future<void> _submitUserForm() async {
     final ci = _ciController.text.trim();
     final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
+    final name = _nameController.text.trim();
 
     if (ci.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -86,15 +90,51 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_managementMode == UserManagementMode.register
-            ? 'Usuario registrado (demo)'
-            : 'Contraseña actualizada (demo)'),
-      ),
-    );
+    if (_managementMode == UserManagementMode.register && _canManageUsers && name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor ingresa el nombre completo.')),
+      );
+      return;
+    }
 
-    _closeManagementPanel();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      if (_managementMode == UserManagementMode.register && _canManageUsers) {
+        await _apiService.registerUser(
+          ci: ci,
+          name: name,
+          password: password,
+          role: UserRole.toBackendRole(_selectedRole),
+        );
+        if (!mounted) return;
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Usuario registrado correctamente.')),
+        );
+      } else {
+        await _apiService.changePassword(ci: ci, newPassword: password);
+        if (!mounted) return;
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Contraseña actualizada correctamente.')),
+        );
+      }
+      _closeManagementPanel();
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   Widget _panelContainer({required Widget child}) {
@@ -215,12 +255,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       filled: true,
                       fillColor: Color(0xFF0F1930),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'Técnico', child: Text('Técnico')),
-                      DropdownMenuItem(value: 'Supervisor', child: Text('Supervisor')),
-                      DropdownMenuItem(value: 'Jefe', child: Text('Jefe')),
-                      DropdownMenuItem(value: 'Administrador', child: Text('Administrador')),
-                    ],
+                    items: UserRole.all
+                        .map((role) => DropdownMenuItem(value: role, child: Text(role)))
+                        .toList(),
                     onChanged: (value) {
                       if (value != null) {
                         setState(() => _selectedRole = value);
@@ -233,10 +270,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _submitUserForm,
-                        child: Text(_managementMode == UserManagementMode.register
-                            ? 'Registrar usuario'
-                            : 'Actualizar contraseña'),
+                        onPressed: _isSubmitting ? null : _submitUserForm,
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : Text(_managementMode == UserManagementMode.register
+                                ? 'Registrar usuario'
+                                : 'Actualizar contraseña'),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -391,12 +434,12 @@ class _HomeScreenState extends State<HomeScreen> {
                               const Divider(color: Colors.white12),
                               const SizedBox(height: 8),
                               ElevatedButton(
-                                onPressed: () => _toggleManagementPanel(UserManagementMode.register),
+                                onPressed: () => _toggleManagementPanel(_canManageUsers ? UserManagementMode.register : UserManagementMode.changePassword),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF1E88E5),
                                   minimumSize: const Size.fromHeight(44),
                                 ),
-                                child: const Text('Gestionar usuarios'),
+                                child: Text(_canManageUsers ? 'Gestionar usuarios' : 'Cambiar contraseña'),
                               ),
                               const SizedBox(height: 16),
                               const Align(alignment: Alignment.centerLeft, child: Text('- Lista de casos extendida')),
@@ -422,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8.0, sigmaY: 8.0),
                   child: Container(
-                    color: Colors.black.withOpacity(0.35),
+                    color: const Color.fromRGBO(0, 0, 0, 0.35),
                     alignment: Alignment.center,
                     child: GestureDetector(
                       onTap: () {},

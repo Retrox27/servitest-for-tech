@@ -12,7 +12,6 @@ class ApiService {
 
   Future<LoginResponse> login(String ci, String password) async {
     final url = Uri.parse('$baseUrl/auth/login');
-    print('Login URL: $baseUrl/auth/login');
     try {
       final response = await http.post(
         url,
@@ -40,6 +39,70 @@ class ApiService {
 
   Future<String?> getToken() async {
     return _storage.read(key: 'token');
+  }
+
+  Future<void> registerUser({
+    required String ci,
+    required String name,
+    required String password,
+    required String role,
+  }) async {
+    final token = await getToken();
+    if (token == null) {
+      throw ApiException(0, 'No hay token de autenticación disponible.');
+    }
+
+    final url = Uri.parse('$baseUrl/auth/register');
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'ci': ci,
+        'name': name,
+        'password': password,
+        'role': role,
+      }),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return;
+    }
+
+    final errorBody = response.body.isNotEmpty ? response.body : 'Error ${response.statusCode}';
+    throw ApiException(response.statusCode, errorBody);
+  }
+
+  Future<void> changePassword({
+    required String ci,
+    required String newPassword,
+  }) async {
+    final token = await getToken();
+    if (token == null) {
+      throw ApiException(0, 'No hay token de autenticación disponible.');
+    }
+
+    final url = Uri.parse('$baseUrl/auth/change-password');
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'ci': ci,
+        'new_password': newPassword,
+      }),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return;
+    }
+
+    final errorBody = response.body.isNotEmpty ? response.body : 'Error ${response.statusCode}';
+    throw ApiException(response.statusCode, errorBody);
   }
 
   Future<void> logout() async {
